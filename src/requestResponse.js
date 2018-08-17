@@ -1,5 +1,5 @@
 const IpcBase = require('./base');
-const IpcRouter = require('./router');
+const Router = require('./router');
 const { MalformedResponseError, TimeoutError, AbortedError, DisconnectedError, RequestError, MethodNotImplementedError } = require('./errors');
 const ABORTED_ERROR = Symbol('ABORTED_ERROR');
 
@@ -17,8 +17,8 @@ function parseError (error) {
   const parsedError = {
     message: error.message
   };
-  if (!(error instanceof RequestError) && error.name !== Error.prototype.name) parsedError.name = error.name;
-  if (error.hasOwnProperty('code')) parsedError.code = error.code;
+  parsedError.name = error.name;
+  if ('code' in error) parsedError.code = error.code;
 
   return parsedError;
 }
@@ -32,7 +32,7 @@ class IpcRequestResponse extends IpcBase {
     super(id, options);
     this.requests = new Map();
     this.queue = [];
-    this.router = router || new IpcRouter();
+    this.router = router || new Router();
     this.connected = false;
     this.started = false;
     this.startPromises = new Map();
@@ -45,6 +45,7 @@ class IpcRequestResponse extends IpcBase {
   start () {
     this.started = true;
     this.emit('start');
+    return Promise.resolve();
   }
 
   stop () {
@@ -53,16 +54,17 @@ class IpcRequestResponse extends IpcBase {
       reject(ABORTED_ERROR);
     }
     this.emit('stop');
+    return Promise.resolve();
   }
 
-  awaitStart (timeout = null) {
+  awaitConnection (timeout = null) {
     if (this.connected) return Promise.resolve();
 
     const timeoutErr = new TimeoutError('Failed to connect within the specified timeframe.');
-    Error.captureStackTrace(timeoutErr, this.awaitStart);
+    Error.captureStackTrace(timeoutErr, this.awaitConnection);
 
     const abortErr = new AbortedError('Connection aborted before being established.');
-    Error.captureStackTrace(abortErr, this.awaitStart);
+    Error.captureStackTrace(abortErr, this.awaitConnection);
     let resolveReject;
     const promise = new Promise((resolve, reject) => {
       resolveReject = {resolve, reject};
@@ -76,7 +78,10 @@ class IpcRequestResponse extends IpcBase {
         this.stop();
       }, timeout) : null;
       this.once('connect', cb);
-      this.start();
+      this.start().catch(err => {
+        if (err instanceof AbortedError) return;
+        throw err;
+      });
     });
     this.startPromises.set(promise, resolveReject);
     return promise.then(res => {

@@ -1,4 +1,4 @@
-const { IpcServer, IpcClient, RequestError } = moduleUnderTest;
+const { Server, Client, RequestError, MissingRouteError } = moduleUnderTest;
 
 describe('connections', function () {
   let server;
@@ -25,12 +25,12 @@ describe('connections', function () {
     }
   });
   describe('basics', function () {
-    it('bare minimum - server', async function () {
-      server = new IpcServer('testid');
+    it('bare minimum - missing route', async function () {
+      server = new Server('testid');
       await server.start(1500);
-      client = new IpcClient('testid');
-      await client.start(1500);
-      return client.request('testroute').should.eventually.be.rejectedWith(RequestError);
+      client = new Client('testid');
+      await client.awaitConnection(1500);
+      return client.request('testroute').should.eventually.be.rejectedWith(RequestError).that.includes({code: MissingRouteError.prototype.code});
     });
   });
 });

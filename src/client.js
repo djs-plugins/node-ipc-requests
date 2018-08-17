@@ -1,7 +1,7 @@
-const IpcRequestResponse = require('./requestResponse');
+const RequestResponse = require('./requestResponse');
 const { DisconnectedError } = require('./errors');
 
-class IpcClient extends IpcRequestResponse {
+class Client extends RequestResponse {
   get socket () {
     return this.ipc.of[this.id];
   }
@@ -18,7 +18,7 @@ class IpcClient extends IpcRequestResponse {
     this.socket.on('disconnect', (...args) => this.handleDisconnect(...args));
     this.socket.on('response', (...args) => this.handleResponse(...args));
     this.socket.on('connect', (...args) => this.handleConnect(...args));
-    super.start();
+    return super.start();
   }
 
   stop () {
@@ -27,4 +27,4 @@ class IpcClient extends IpcRequestResponse {
   }
 }
 
-module.exports = IpcClient;
+module.exports = Client;

@@ -1,7 +1,7 @@
-const IpcRequestResponse = require('./requestResponse');
+const RequestResponse = require('./requestResponse');
 const { DisconnectedError, InvalidMethodError } = require('./errors');
 
-class IpcServerClient extends IpcRequestResponse {
+class ServerClient extends RequestResponse {
   constructor (ipc, socket, options, router) {
     super(ipc, options, router);
     this.socket = socket;
@@ -17,7 +17,7 @@ class IpcServerClient extends IpcRequestResponse {
   }
 
   start () {
-    if (this.started) return;
+    if (this.started) return Promise.resolve();
     throw new InvalidMethodError('Cannot restart a server client. Connection must be re-established from the clients end.');
   }
 
@@ -27,10 +27,10 @@ class IpcServerClient extends IpcRequestResponse {
   }
 
   stop () {
-    if (!this.started) return;
+    if (!this.started) return Promise.resolve();
     this.socket.destroy();
     this.socket = null;
-    super.stop();
+    return super.stop();
   }
 
   request (resource, body) {
@@ -41,4 +41,4 @@ class IpcServerClient extends IpcRequestResponse {
   }
 }
 
-module.exports = IpcServerClient;
+module.exports = ServerClient;

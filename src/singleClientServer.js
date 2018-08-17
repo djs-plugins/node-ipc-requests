@@ -1,6 +1,6 @@
-const IpcRequestResponse = require('./requestResponse');
+const RequestResponse = require('./requestResponse');
 const { AbortedError, DisconnectedError } = require('./errors');
-class IpcSingleClientServer extends IpcRequestResponse {
+class SingleClientServer extends RequestResponse {
   constructor (id, options, router) {
     options = (options || {});
     options.maxConnections = 1;
@@ -70,11 +70,11 @@ class IpcSingleClientServer extends IpcRequestResponse {
         this.ipc.server.stop();
       });
       this.startingPromise.reject(new AbortedError('Server got stopped before properly starting'));
-      return;
+      return Promise.resolve();
     }
-    if (!this.started) return;
+    if (!this.started) return Promise.resolve();
     this.ipc.server.stop();
-    super.stop();
+    return super.stop();
   }
 
   handleDisconnect () {
@@ -96,4 +96,4 @@ class IpcSingleClientServer extends IpcRequestResponse {
   }
 }
 
-module.exports = IpcSingleClientServer;
+module.exports = SingleClientServer;

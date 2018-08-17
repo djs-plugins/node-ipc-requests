@@ -1,4 +1,4 @@
-const { IpcRouter } = moduleUnderTest;
+const { Router } = moduleUnderTest;
 
 /* eslint-env node, mocha */
 const baseConstructorTests = (constructor, router) => {
@@ -43,10 +43,10 @@ const baseConstructorTests = (constructor, router) => {
   if (!router) return;
   it('router - undefined', function () {
     const server = new constructor('testid');
-    return server.router.should.be.instanceOf(IpcRouter);
+    return server.router.should.be.instanceOf(Router);
   });
   it('router - provided', function () {
-    const router = new IpcRouter();
+    const router = new Router();
     const server = new constructor('testid', undefined, router);
     return server.router.should.be.equal(router);
   });

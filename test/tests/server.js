@@ -1,15 +1,15 @@
-const { IpcServer, IpcRouter, AbortedError } = moduleUnderTest;
+const { Server, Router, AbortedError } = moduleUnderTest;
 
-describe('IpcServer', function () {
+describe('Server', function () {
   describe('constructor', function () {
-    baseConstructorTests(IpcServer);
+    baseConstructorTests(Server);
     it('router - undefined', function () {
-      const server = new IpcServer('testid');
+      const server = new Server('testid');
       return should.not.exist(server.router);
     });
     it('router - provided', function () {
-      const router = new IpcRouter();
-      const server = new IpcServer('testid', undefined, router);
+      const router = new Router();
+      const server = new Server('testid', undefined, router);
       return server.router.should.be.equal(router);
     });
   });
@@ -25,21 +25,21 @@ describe('IpcServer', function () {
       }
     });
     it('start', function () {
-      server = new IpcServer('testid');
+      server = new Server('testid');
       return server.start().should.be.fulfilled;
     });
     it('start (abort)', function () {
-      server = new IpcServer('testid');
+      server = new Server('testid');
       const res = server.start().should.be.rejectedWith(AbortedError);
       server.stop();
       return res;
     });
     it('start (double)', function () {
-      server = new IpcServer('testid');
+      server = new Server('testid');
       return Promise.all([server.start(), server.start()]).should.be.fulfilled;
     });
     it('start (await double)', async function () {
-      server = new IpcServer('testid');
+      server = new Server('testid');
       await server.start();
       return server.start().should.be.fulfilled;
     });

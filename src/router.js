@@ -1,6 +1,6 @@
 const { MissingRouteError } = require('./errors');
 
-class IpcRouter {
+class Router {
   constructor () {
     this.routes = new Map();
     this.parent = null;
@@ -31,4 +31,4 @@ class IpcRouter {
   }
 }
 
-module.exports = IpcRouter;
+module.exports = Router;

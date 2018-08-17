@@ -4,22 +4,22 @@
  * @see {@link https://nodejs.org/api/events.html}
  */
 
-const IpcClient = require('./client');
-const IpcServer = require('./server');
-const IpcServerClient = require('./serverClient');
-const IpcSingleClientServer = require('./singleClientServer');
+const Client = require('./client');
+const Server = require('./server');
+const ServerClient = require('./serverClient');
+const SingleClientServer = require('./singleClientServer');
 const IpcBase = require('./base');
-const IpcRequestResponse = require('./requestResponse');
-const IpcRouter = require('./router');
+const RequestResponse = require('./requestResponse');
+const Router = require('./router');
 const errors = require('./errors');
 
 module.exports = {
-  IpcClient,
-  IpcServer,
-  IpcServerClient,
-  IpcSingleClientServer,
+  Client,
+  Server,
+  ServerClient,
+  SingleClientServer,
   IpcBase,
-  IpcRequestResponse,
-  IpcRouter,
+  RequestResponse,
+  Router,
   ...errors
 };

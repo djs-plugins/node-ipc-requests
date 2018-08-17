@@ -1,8 +1,8 @@
 const IpcBase = require('./base');
-const IpcServerClient = require('./serverClient');
+const ServerClient = require('./serverClient');
 const { MissingClientError, AbortedError } = require('./errors');
 
-class IpcServer extends IpcBase {
+class Server extends IpcBase {
   constructor (id, options, router) {
     super(id, options);
     this.router = router;
@@ -85,7 +85,7 @@ class IpcServer extends IpcBase {
   }
 
   handleConnect (socket) {
-    const client = new IpcServerClient(this.ipc, socket, this.options);
+    const client = new ServerClient(this.ipc, socket, this.options);
     if (this.router) client.router.parent = this.router;
     this.connections.set(socket, client);
     this.emit('newClient', client);
@@ -98,7 +98,7 @@ class IpcServer extends IpcBase {
   broadcast (clients, resource, data) {
     if (clients) {
       if (Array.isArray(clients)) return Promise.all(clients.map(client => this.request(resource, data, client)));
-      if (!(clients instanceof IpcServerClient)) clients = this.clients.get(clients);
+      if (!(clients instanceof ServerClient)) clients = this.clients.get(clients);
       if (!clients) return Promise.reject(new MissingClientError('Tried to broadcast to missing client'));
       return clients.request(resource, data);
     } else {
@@ -107,4 +107,4 @@ class IpcServer extends IpcBase {
   }
 }
 
-module.exports = IpcServer;
+module.exports = Server;

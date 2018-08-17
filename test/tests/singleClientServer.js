@@ -1,8 +1,8 @@
-const { IpcSingleClientServer, AbortedError, DisconnectedError } = moduleUnderTest;
+const { SingleClientServer, AbortedError, DisconnectedError, TimeoutError } = moduleUnderTest;
 
-describe('IpcSingleClientServer', function () {
+describe('SingleClientServer', function () {
   describe('constructor', function () {
-    baseConstructorTests(IpcSingleClientServer, true);
+    baseConstructorTests(SingleClientServer, true);
   });
 
   describe('basics', function () {
@@ -16,25 +16,29 @@ describe('IpcSingleClientServer', function () {
       }
     });
     it('start', function () {
-      server = new IpcSingleClientServer('testid');
+      server = new SingleClientServer('testid');
       return server.start().should.be.fulfilled;
     });
     it('start (abort)', function () {
-      server = new IpcSingleClientServer('testid');
+      server = new SingleClientServer('testid');
       server.start().should.be.rejectedWith(AbortedError);
       server.stop();
     });
     it('start (double)', function () {
-      server = new IpcSingleClientServer('testid');
+      server = new SingleClientServer('testid');
       return Promise.all([server.start(), server.start()]).should.be.fulfilled;
     });
     it('start (await double)', async function () {
-      server = new IpcSingleClientServer('testid');
+      server = new SingleClientServer('testid');
       await server.start();
       return server.start().should.be.fulfilled;
     });
-    it('send - with no connection', async function () {
-      server = new IpcSingleClientServer('testid');
+    it('awaitConnection - no server', function () {
+      server = new SingleClientServer('testid');
+      return server.awaitConnection(10).should.be.rejectedWith(TimeoutError);
+    });
+    it('send - without connection', async function () {
+      server = new SingleClientServer('testid');
       await server.start();
       return (() => server.send()).should.throw(DisconnectedError);
     });
