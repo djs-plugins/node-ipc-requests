@@ -1,6 +1,7 @@
 const IpcBase = require('./base');
 const IpcRouter = require('./router');
-const { MalformedResponseError, RequestTimeoutError, IpcDisconnectedError, RequestError } = require('./errors');
+const { MalformedResponseError, TimeoutError, AbortedError, DisconnectedError, RequestError, MethodNotImplementedError } = require('./errors');
+const ABORTED_ERROR = Symbol('ABORTED_ERROR');
 
 let sequence = 0;
 
@@ -8,19 +9,6 @@ let sequence = 0;
  * @typedef {object} IpcOptions
  * @property {number} [timeout=5000] How long to wait until timing out a request without a response
  */
-
-function buildError (src) {
-  if (typeof src === 'object') {
-    const error = new Error(src.message, src.name, src.code);
-    if (src.hasOwnProperty('code')) error.code = src.code;
-    if (src.hasOwnProperty('name')) error.name = src.code;
-    return error;
-  }
-  if (typeof src === 'string') {
-    return new Error(src);
-  }
-  return new Error('Unknown Request Error');
-}
 
 function parseError (error) {
   if (!(error instanceof Error)) {
@@ -42,26 +30,83 @@ function parseError (error) {
 class IpcRequestResponse extends IpcBase {
   constructor (id, options, router) {
     super(id, options);
-    this.promises = new Map();
+    this.requests = new Map();
+    this.queue = [];
     this.router = router || new IpcRouter();
+    this.connected = false;
+    this.started = false;
+    this.startPromises = new Map();
   }
 
-  async handleRequest (req, send) {
+  send () {
+    throw new MethodNotImplementedError(`${this.constructor.name} does not implement the send method.`);
+  }
+
+  start () {
+    this.started = true;
+    this.emit('start');
+  }
+
+  stop () {
+    this.stopped = true;
+    for (const [, {reject}] of this.startPromises) {
+      reject(ABORTED_ERROR);
+    }
+    this.emit('stop');
+  }
+
+  awaitStart (timeout = null) {
+    if (this.connected) return Promise.resolve();
+
+    const timeoutErr = new TimeoutError('Failed to connect within the specified timeframe.');
+    Error.captureStackTrace(timeoutErr, this.awaitStart);
+
+    const abortErr = new AbortedError('Connection aborted before being established.');
+    Error.captureStackTrace(abortErr, this.awaitStart);
+    let resolveReject;
+    const promise = new Promise((resolve, reject) => {
+      resolveReject = {resolve, reject};
+      const cb = () => {
+        clearTimeout(_timeout);
+        resolve();
+      };
+      const _timeout = timeout ? setTimeout(() => {
+        this.off('connect', cb);
+        reject(timeoutErr);
+        this.stop();
+      }, timeout) : null;
+      this.once('connect', cb);
+      this.start();
+    });
+    this.startPromises.set(promise, resolveReject);
+    return promise.then(res => {
+      this.startPromises.delete(promise);
+      return res;
+    }, err => {
+      this.startPromises.delete(promise);
+      if (err === ABORTED_ERROR) err = abortErr;
+      throw err;
+    });
+  }
+
+  async handleRequest (req) {
+    let response;
     try {
-      const response = await this.router.route(req.resource, req.body, req);
-      send({
-        requestId: req.requestId,
-        status: 'success',
-        body: response
-      });
+      response = await this.router.route(req.resource, req.body, req);
     } catch (err) {
-      send({
+      this.send('response', {
         requestId: req.requestId,
         status: 'error',
         error: parseError(err)
       });
       this.emit('requestError', err);
+      return;
     }
+    this.send('response', {
+      requestId: req.requestId,
+      status: 'success',
+      body: response
+    });
   }
 
   handleResponse (data) {
@@ -73,13 +118,13 @@ class IpcRequestResponse extends IpcBase {
       this.emit('error', new MalformedResponseError('Got response with non-string requestId'));
       return;
     }
-    if (!this.promises.has(data.requestId)) {
+    if (!this.requests.has(data.requestId)) {
       this.emit('warn', 'Got response with no promise attached to the requestId. Perhaps the request already timed out? requestId: ' + data.requestId);
       return;
     }
-    const { resolve, reject } = this.promises.get(data.requestId);
+    const { resolve, reject } = this.requests.get(data.requestId);
     if (data.status === 'error') {
-      reject(buildError(data.error));
+      reject(data.error);
     } else if (data.status === 'success') {
       resolve(data.body);
     } else {
@@ -87,10 +132,49 @@ class IpcRequestResponse extends IpcBase {
     }
   }
 
-  request (resource, body, send) {
-    if (!this.connected) {
-      return Promise.reject(new IpcDisconnectedError('IpcClient is not connected'));
+  handleConnect () {
+    this.connected = true;
+    const oldQueue = this.queue;
+    this.queue = [];
+    for (const args of oldQueue) {
+      this.makeRequest(...args);
     }
+    this.emit('connect');
+  }
+
+  handleDisconnect () {
+    this.connected = false;
+    for (const { onDc } of this.requests.values()) {
+      onDc(new DisconnectedError('IPC client disconnected during request'));
+    }
+    this.emit('disconnect');
+  }
+
+  retry (requestId, ...args) {
+    if (this.requests.has(requestId)) {
+      this.makeRequest(...args);
+    }
+  }
+
+  makeRequest (data, retry, resolve, reject) {
+    if (!this.requests.has(data.requestId)) {
+      const timeout = this.options.timeout
+        ? setTimeout(() => reject(new TimeoutError(`Request timed out after ${this.options.timeout}ms`)), this.options.timeout)
+        : null;
+      this.requests.set(data.requestId, {
+        resolve,
+        reject,
+        timeout,
+        onDc: retry ? () => this.retry(data.requestId, ...arguments) : err => reject(err)
+      });
+    }
+    if (!this.connected) {
+      this.queue.push([...arguments]);
+    }
+    this.send('request', data);
+  }
+
+  request (resource, body, retry = false) {
     const data = {
       resource,
       requestId: String(++sequence),
@@ -101,23 +185,18 @@ class IpcRequestResponse extends IpcBase {
     Error.captureStackTrace(context, this.request);
 
     const promise = new Promise((resolve, reject) => {
-      this.promises.set(data.requestId, {
-        resolve,
-        reject,
-        timeout: setTimeout(() => reject(new RequestTimeoutError(`Request timed out after ${this.options.timeout}ms`)), this.options.timeout)
-      });
+      this.makeRequest(data, retry, resolve, reject);
     }).then(res => {
-      const { timeout } = this.promises.get(data.requestId);
+      const { timeout } = this.requests.get(data.requestId);
       clearTimeout(timeout);
-      this.promises.delete(data.requestId);
+      this.requests.delete(data.requestId);
       return res;
     }, err => {
-      const { timeout } = this.promises.get(data.requestId);
+      const { timeout } = this.requests.get(data.requestId);
       clearTimeout(timeout);
-      this.promises.delete(data.requestId);
+      this.requests.delete(data.requestId);
       throw new RequestError(err, context);
     });
-    send(data);
     return promise;
   }
 }

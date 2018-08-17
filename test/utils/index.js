@@ -1,7 +1,7 @@
-const { IpcRouter } = require('../src');
+const { IpcRouter } = moduleUnderTest;
 
 /* eslint-env node, mocha */
-module.exports = (constructor, router) => {
+const baseConstructorTests = (constructor, router) => {
   it('empty', function () {
     return (() => new constructor()).should.throw(TypeError);
   });
@@ -51,3 +51,5 @@ module.exports = (constructor, router) => {
     return server.router.should.be.equal(router);
   });
 };
+
+module.exports = { baseConstructorTests };

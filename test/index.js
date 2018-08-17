@@ -2,12 +2,10 @@ const chai = require('chai');
 const chaiAsPromised = require('chai-as-promised');
 chai.use(chaiAsPromised);
 global.should = chai.should();
-global.baseConstructorTests = require('./constructorTests');
+
 global.moduleUnderTest = require('../src');
 
-/*
-  TESTS BELOW
-*/
+const utils = require('./utils');
+global.baseConstructorTests = utils.baseConstructorTests;
 
-require('./router');
-require('./server');
+require('./tests');

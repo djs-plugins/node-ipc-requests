@@ -59,6 +59,7 @@ class IpcBase extends EventEmitter {
       Object.assign(this.ipc.config, { id }, defaultIpcConf, ipcConfig);
     }
     this.options = Object.assign({}, defaultOptions, options);
+    this.id = this.ipc.config.id;
   }
 }
 

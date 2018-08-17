@@ -3,6 +3,7 @@ const { MissingRouteError } = require('./errors');
 class IpcRouter {
   constructor () {
     this.routes = new Map();
+    this.parent = null;
   }
 
   addRoute (route, handler) {
@@ -22,9 +23,10 @@ class IpcRouter {
     this.routes.delete(route);
   }
 
-  route (resource, ...args) {
+  async route (resource, ...args) {
     const handler = this.routes.get(resource);
-    if (!handler) throw new MissingRouteError(`resource ${resource} is not registered in the router`);
+    if (!handler && !this.parent) throw new MissingRouteError(`resource ${resource} is not registered in the router`);
+    if (!handler) return this.parent.route(resource, ...args);
     return handler(...args);
   }
 }

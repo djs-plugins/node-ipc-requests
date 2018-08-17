@@ -1,6 +1,6 @@
 const { IpcRouter, MissingRouteError } = moduleUnderTest;
 
-describe('router', function () {
+describe('IpcRouter', function () {
   it('constructor', function () {
     return (() => new IpcRouter()).should.not.throw();
   });
@@ -28,12 +28,12 @@ describe('router', function () {
   describe('routing', function () {
     it('missing route', function () {
       const router = new IpcRouter();
-      return (() => router.route('missing')).should.throw(MissingRouteError);
+      return router.route('missing').should.be.rejectedWith(MissingRouteError);
     });
     it('valid route - function handler', function () {
       const router = new IpcRouter();
       router.addRoute('func', () => 'response');
-      return router.route('func').should.be.equal('response');
+      return router.route('func').should.eventually.be.equal('response');
     });
     it('valid route - object handler', function () {
       const router = new IpcRouter();
@@ -44,13 +44,41 @@ describe('router', function () {
         }
       };
       router.addRoute('func', handler);
-      return router.route('func').should.be.equal(handler.prop);
+      return router.route('func').should.eventually.be.equal(handler.prop);
     });
     it('removed route', function () {
       const router = new IpcRouter();
       router.addRoute('removed', () => 'response');
       router.removeRoute('removed');
-      return (() => router.route('removed')).should.throw(MissingRouteError);
+      return router.route('removed').should.be.rejectedWith(MissingRouteError);
+    });
+    it('route on parent', function () {
+      const parent = new IpcRouter();
+      const router = new IpcRouter();
+      router.parent = parent;
+      parent.addRoute('parentRoute', () => 'response');
+      return router.route('parentRoute').should.eventually.be.equal('response');
+    });
+    it('missing route with parent', function () {
+      const parent = new IpcRouter();
+      const router = new IpcRouter();
+      router.parent = parent;
+      return router.route('missingroute').should.be.rejectedWith(MissingRouteError);
+    });
+    it('route on child', function () {
+      const parent = new IpcRouter();
+      const router = new IpcRouter();
+      router.parent = parent;
+      router.addRoute('childRoute', () => 'response');
+      return router.route('childRoute').should.eventually.be.equal('response');
+    });
+    it('duplicate route on parent', function () {
+      const parent = new IpcRouter();
+      const router = new IpcRouter();
+      router.parent = parent;
+      parent.addRoute('dupeRoute', () => 'parent response');
+      router.addRoute('dupeRoute', () => 'child response');
+      return router.route('dupeRoute').should.eventually.be.equal('child response');
     });
   });
 });

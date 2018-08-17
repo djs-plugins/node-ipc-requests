@@ -6,8 +6,8 @@
 
 const IpcClient = require('./client');
 const IpcServer = require('./server');
-const IpcServerClient = require('./server/client');
-const IpcSingleClientServer = require('./server/singleClient');
+const IpcServerClient = require('./serverClient');
+const IpcSingleClientServer = require('./singleClientServer');
 const IpcBase = require('./base');
 const IpcRequestResponse = require('./requestResponse');
 const IpcRouter = require('./router');
