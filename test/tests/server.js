@@ -1,17 +1,8 @@
-const { Server, Router, AbortedError } = moduleUnderTest;
+const { Server, AbortedError } = moduleUnderTest;
 
 describe('Server', function () {
   describe('constructor', function () {
     baseConstructorTests(Server);
-    it('router - undefined', function () {
-      const server = new Server('testid');
-      return should.not.exist(server.router);
-    });
-    it('router - provided', function () {
-      const router = new Router();
-      const server = new Server('testid', undefined, router);
-      return server.router.should.be.equal(router);
-    });
   });
 
   describe('basics', function () {

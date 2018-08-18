@@ -2,7 +2,7 @@ const { SingleClientServer, AbortedError, DisconnectedError, TimeoutError } = mo
 
 describe('SingleClientServer', function () {
   describe('constructor', function () {
-    baseConstructorTests(SingleClientServer, true);
+    baseConstructorTests(SingleClientServer);
   });
 
   describe('basics', function () {

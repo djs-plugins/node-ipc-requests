@@ -2,7 +2,7 @@ const { Client, TimeoutError, AbortedError, DisconnectedError } = moduleUnderTes
 
 describe('Client', function () {
   describe('constructor', function () {
-    baseConstructorTests(Client, true);
+    baseConstructorTests(Client);
   });
 
   describe('basics', function () {

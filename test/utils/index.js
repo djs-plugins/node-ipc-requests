@@ -1,7 +1,7 @@
 const { Router } = moduleUnderTest;
 
 /* eslint-env node, mocha */
-const baseConstructorTests = (constructor, router) => {
+const baseConstructorTests = (constructor) => {
   it('empty', function () {
     return (() => new constructor()).should.throw(TypeError);
   });
@@ -40,7 +40,6 @@ const baseConstructorTests = (constructor, router) => {
     const server = new constructor('testid', ipcOptions);
     return server.options.should.be.an('object').that.does.not.includes(ipcOptions);
   });
-  if (!router) return;
   it('router - undefined', function () {
     const server = new constructor('testid');
     return server.router.should.be.instanceOf(Router);
