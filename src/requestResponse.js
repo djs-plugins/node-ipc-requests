@@ -65,33 +65,33 @@ class IpcRequestResponse extends IpcBase {
 
     const abortErr = new AbortedError('Connection aborted before being established.');
     Error.captureStackTrace(abortErr, this.awaitConnection);
+
     let resolveReject;
-    const promise = new Promise((resolve, reject) => {
+    const basePromise = new Promise((resolve, reject) => {
       resolveReject = {resolve, reject};
-      const cb = () => {
-        clearTimeout(_timeout);
-        resolve();
-      };
-      const _timeout = timeout ? setTimeout(() => {
-        this.off('connect', cb);
-        reject(timeoutErr);
-        this.stop();
-      }, timeout) : null;
-      this.once('connect', cb);
+      this.once('connect', () => resolve());
       this.start().catch(err => {
-        if (err instanceof AbortedError) return;
+        if (err instanceof AbortedError) return reject(ABORTED_ERROR);
         throw err;
       });
     });
-    this.startPromises.set(promise, resolveReject);
-    return promise.then(res => {
-      this.startPromises.delete(promise);
+
+    this.startPromises.set(basePromise, resolveReject);
+
+    const promise = basePromise.then(res => {
+      this.startPromises.delete(basePromise);
       return res;
     }, err => {
-      this.startPromises.delete(promise);
+      this.startPromises.delete(basePromise);
       if (err === ABORTED_ERROR) err = abortErr;
       throw err;
     });
+
+    if (timeout) {
+      return Promise.race([promise,
+        new Promise((resolve, reject) => setTimeout(() => reject(timeoutErr), timeout))]);
+    }
+    return promise;
   }
 
   async handleRequest (req) {
@@ -161,7 +161,7 @@ class IpcRequestResponse extends IpcBase {
     }
   }
 
-  makeRequest (data, retry, resolve, reject) {
+  makeRequest (data, resolve, reject) {
     if (!this.requests.has(data.requestId)) {
       const timeout = this.options.timeout
         ? setTimeout(() => reject(new TimeoutError(`Request timed out after ${this.options.timeout}ms`)), this.options.timeout)
@@ -170,16 +170,17 @@ class IpcRequestResponse extends IpcBase {
         resolve,
         reject,
         timeout,
-        onDc: retry ? () => this.retry(data.requestId, ...arguments) : err => reject(err)
+        onDc: err => reject(err)
       });
     }
     if (!this.connected) {
       this.queue.push([...arguments]);
+    } else {
+      this.send('request', data);
     }
-    this.send('request', data);
   }
 
-  request (resource, body, retry = false) {
+  request (resource, body) {
     const data = {
       resource,
       requestId: String(++sequence),
@@ -190,17 +191,13 @@ class IpcRequestResponse extends IpcBase {
     Error.captureStackTrace(context, this.request);
 
     const promise = new Promise((resolve, reject) => {
-      this.makeRequest(data, retry, resolve, reject);
-    }).then(res => {
-      const { timeout } = this.requests.get(data.requestId);
-      clearTimeout(timeout);
-      this.requests.delete(data.requestId);
-      return res;
-    }, err => {
-      const { timeout } = this.requests.get(data.requestId);
-      clearTimeout(timeout);
-      this.requests.delete(data.requestId);
+      this.makeRequest(data, resolve, reject);
+    }).catch(err => {
       throw new RequestError(err, context);
+    }).finally(() => {
+      const { timeout } = this.requests.get(data.requestId);
+      clearTimeout(timeout);
+      this.requests.delete(data.requestId);
     });
     return promise;
   }

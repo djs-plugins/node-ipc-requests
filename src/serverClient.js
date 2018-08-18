@@ -28,6 +28,7 @@ class ServerClient extends RequestResponse {
 
   stop () {
     if (!this.started) return Promise.resolve();
+    if (!this.socket) return Promise.resolve();
     this.socket.destroy();
     this.socket = null;
     return super.stop();

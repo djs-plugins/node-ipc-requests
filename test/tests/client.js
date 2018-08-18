@@ -15,17 +15,21 @@ describe('Client', function () {
         client.stop();
       }
     });
-    it('start (abort)', function () {
+    it('start', function () {
       client = new Client('testid');
-      const promise = client.awaitConnection();
+      return client.start().should.be.fulfilled;
+    });
+    it('start - abort', function () {
+      client = new Client('testid');
+      const promise = client.start();
       client.stop();
       return promise.should.be.rejectedWith(AbortedError);
     });
-    it('start (double)', function () {
+    it('start - double', function () {
       client = new Client('testid');
       return Promise.all([client.start(), client.start()]).should.be.fulfilled;
     });
-    it('start (await double)', async function () {
+    it('start - await double', async function () {
       client = new Client('testid');
       await client.start();
       return client.start().should.be.fulfilled;
@@ -41,6 +45,12 @@ describe('Client', function () {
     it('awaitConnection - no server', function () {
       client = new Client('testid');
       return client.awaitConnection(10).should.be.rejectedWith(TimeoutError);
+    });
+    it('awaitConnection - abort', function () {
+      client = new Client('testid');
+      const promise = client.awaitConnection(1500);
+      client.stop();
+      return promise.should.be.rejectedWith(AbortedError);
     });
     it('send - without connection', async function () {
       client = new Client('testid');

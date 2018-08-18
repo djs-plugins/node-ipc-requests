@@ -1,14 +1,15 @@
 const IpcBase = require('./base');
 const ServerClient = require('./serverClient');
-const { MissingClientError, AbortedError } = require('./errors');
+const Router = require('./router');
+const { MissingClientError, AbortedError, TimeoutError } = require('./errors');
 
 class Server extends IpcBase {
   constructor (id, options, router) {
     super(id, options);
-    this.router = router;
+    this.router = router || new Router();
     const { socketRoot, appspace } = this.ipc.config;
     const servePath = socketRoot + appspace + id;
-    this.connections = new Map();
+    this.clients = new Map();
     this.ipc.serve(servePath, () => this.emit('start'));
     this.ipc.server.on('request', (...args) => this.handleRequest(...args));
     this.ipc.server.on('response', (...args) => this.handleResponse(...args));
@@ -28,26 +29,32 @@ class Server extends IpcBase {
     this.ipc.server.on('start', this._startCb);
   }
 
-  start () {
+  start (timeout = null) {
     if (this.started) return Promise.resolve();
-    if (this.startingPromise) return this.startingPromise.promise;
-    const promise = new Promise((resolve, reject) => {
-      this.startingPromise = {resolve, reject};
-      this.setStartCb(() => {
-        this.started = true;
-        this.emit('start');
-        this.startingPromise.resolve();
+    if (!this.startingPromise) {
+      const promise = new Promise((resolve, reject) => {
+        this.startingPromise = {resolve, reject};
+        this.setStartCb(() => {
+          this.started = true;
+          this.emit('start');
+          this.startingPromise.resolve();
+        });
+        this.ipc.server.start();
+      }).finally(() => {
+        this.startingPromise = null;
       });
-      this.ipc.server.start();
-    }).then(res => {
-      this.startingPromise = null;
-      return res;
-    }, err => {
-      this.startingPromise = null;
-      throw err;
-    });
-    this.startingPromise.promise = promise;
-    return promise;
+      this.startingPromise.promise = promise;
+    }
+    if (timeout) {
+      const timeoutErr = new TimeoutError('Failed to start within the specified timeframe.');
+      Error.captureStackTrace(timeoutErr, this.start);
+
+      return Promise.race([
+        this.startingPromise.promise,
+        new Promise((resolve, reject) => setTimeout(() => { reject(timeoutErr); this.stop(); }, timeout))
+      ]);
+    }
+    return this.startingPromise.promise;
   }
 
   stop () {
@@ -60,12 +67,15 @@ class Server extends IpcBase {
     }
     if (!this.started) return;
     this.started = false;
+    for (const [, client] of this.clients) {
+      client.stop();
+    }
     this.ipc.server.stop();
     this.emit('stop');
   }
 
   handleRequest (req, socket) {
-    const client = this.connections.get(socket);
+    const client = this.clients.get(socket);
     if (!client) {
       this.emit('error', new MissingClientError('Got request from unknown client'));
       return;
@@ -75,7 +85,7 @@ class Server extends IpcBase {
   }
 
   handleResponse (resp, socket) {
-    const client = this.connections.get(socket);
+    const client = this.clients.get(socket);
     if (!client) {
       this.emit('error', new MissingClientError('Got response from unknown client'));
       return;
@@ -87,22 +97,22 @@ class Server extends IpcBase {
   handleConnect (socket) {
     const client = new ServerClient(this.ipc, socket, this.options);
     if (this.router) client.router.parent = this.router;
-    this.connections.set(socket, client);
+    this.clients.set(socket, client);
     this.emit('newClient', client);
     client.once('stop', () => {
-      this.connections.delete(socket);
+      this.clients.delete(socket);
       this.emit('disconnectedClient', client);
     });
   }
 
-  broadcast (clients, resource, data) {
+  broadcast (resource, data, clients) {
     if (clients) {
-      if (Array.isArray(clients)) return Promise.all(clients.map(client => this.request(resource, data, client)));
+      if (Array.isArray(clients)) return Promise.resolve(clients.map(client => this.broadcast(resource, data, client)));
       if (!(clients instanceof ServerClient)) clients = this.clients.get(clients);
       if (!clients) return Promise.reject(new MissingClientError('Tried to broadcast to missing client'));
       return clients.request(resource, data);
     } else {
-      return this.request(resource, data, this.ipc.server.sockets);
+      return this.request(resource, data, [...this.clients.values()]);
     }
   }
 }
