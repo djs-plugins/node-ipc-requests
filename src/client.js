@@ -35,10 +35,12 @@ class Client extends RequestResponse {
         this.socket.on('response', (...args) => this.handleResponse(...args));
         this.socket.on('request', (...args) => this.handleRequest(...args));
         this.socket.on('connect', (...args) => this.handleConnect(...args));
-        super.start();
-        this.startingPromise.resolve();
+        setImmediate(() => {
+          super.start();
+          this.startingPromise.resolve();
+        });
       });
-      this.ipc.connectTo(this.id, () => this._startCb ? setImmediate(() => this._startCb()) : null);
+      this.ipc.connectTo(this.id, () => this._startCb ? this._startCb() : null);
     }).finally(() => {
       this.startingPromise = null;
     });
